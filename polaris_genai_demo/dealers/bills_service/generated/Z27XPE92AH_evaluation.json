@@ -1,0 +1,13 @@
+{
+  "total_score": 95,
+  "passed": true,
+  "competitor_ip_detected": false,
+  "competitor_ip_details": "",
+  "vehicle_entity_score": 35,
+  "vehicle_entity_notes": "The 2027 RZR Pro XP Sport in Matte Granite Gray precisely matches the reference render. Paint color, model decals ('RZR', 'PRO XP', 'POLARIS'), trim badges, bodywork, wheels, and roll cage are 100% faithful with no hallucination or incorrect badging.",
+  "photorealism_score": 25,
+  "photorealism_notes": "Ray-traced floor reflections are present and geometrically accurate to the vehicle. Soft ambient occlusion contact shadows are correctly rendered under all tires, preventing a floating appearance. Lighting is consistent with the overhead showroom fixtures.",
+  "dealer_branding_score": 10,
+  "dealer_branding_notes": "The 'Bills Service' logo is integrated onto a wooden wall structure within the showroom. However, it appears as a flat sign applied to the surface rather than a realistic 3D architectural sign with depth or extrusion.",
+  "recommendations": "To achieve full points for dealer branding, consider rendering the 'Bills Service' logo as a true 3D architectural sign, perhaps with extruded letters or integrated lighting, rather than a flat graphic on a 3D surface."
+}

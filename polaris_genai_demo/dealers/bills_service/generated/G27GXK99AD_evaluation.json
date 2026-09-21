@@ -1,0 +1,13 @@
+{
+  "total_score": 90,
+  "passed": true,
+  "competitor_ip_detected": false,
+  "competitor_ip_details": "",
+  "vehicle_entity_score": 35,
+  "vehicle_entity_notes": "The paint color precisely matches factory Ghost White. Model decals, trim badges, bodywork, wheels, and roll cage are 100% faithful to the reference image with zero hallucination or incorrect badging.",
+  "photorealism_score": 25,
+  "photorealism_notes": "Ray-traced floor reflections are geometrically accurate to the vehicle. Soft ambient occlusion contact shadows are present under all tires, ensuring the vehicle does not appear to be floating. Lighting is consistent with the visible overhead ceiling fixtures.",
+  "dealer_branding_score": 5,
+  "dealer_branding_notes": "The 'Bill's Service Center' logo is integrated onto the showroom wall but appears as a flat graphic or decal rather than a realistic 3D architectural sign with discernible depth and shadows.",
+  "recommendations": "To achieve a perfect score for dealer branding, render the 'Bill's Service Center' logo as a realistic 3D architectural sign with appropriate depth, material textures, and cast shadows on the wall to enhance realism and integration."
+}

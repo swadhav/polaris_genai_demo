@@ -1,0 +1,13 @@
+{
+  "total_score": 75,
+  "passed": false,
+  "competitor_ip_detected": true,
+  "competitor_ip_details": "A KTM dirt bike is clearly visible in the background on the left side of the showroom, which is a direct competitor in the powersports market.",
+  "vehicle_entity_score": 35,
+  "vehicle_entity_notes": "The vehicle's paint color (Ghost White), model decals, trim badges, bodywork, wheels, and roll cage are 100% faithful to the reference image with no detected hallucinations or incorrect badging.",
+  "photorealism_score": 25,
+  "photorealism_notes": "Ray-traced floor reflections are geometrically accurate. Soft ambient occlusion contact shadows are present under all tires, ensuring the vehicle does not appear to float. Lighting is consistent with the overhead ceiling fixtures.",
+  "dealer_branding_score": 15,
+  "dealer_branding_notes": "The Malcolm Smith logo is rendered as realistic 3D architectural signage on the showroom wall, exhibiting appropriate depth, shadows, and highlights, not as a flat 2D watermark.",
+  "recommendations": "The primary recommendation is to remove the competitor brand motorcycle (KTM) from the background to achieve full compliance and pass the audit. All other aspects of the image, including vehicle rendering, photorealism, and dealer branding integration, are excellent."
+}

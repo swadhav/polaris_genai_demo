@@ -1,0 +1,13 @@
+{
+  "total_score": 75,
+  "passed": false,
+  "competitor_ip_detected": true,
+  "competitor_ip_details": "A Kawasaki Teryx KRX 1000 (green side-by-side) is prominently displayed next to the target vehicle, representing competitor intellectual property.",
+  "vehicle_entity_score": 35,
+  "vehicle_entity_notes": "The 2027 RANGER 500 Tractor in Stealth Gray precisely matches the reference render in paint color, model decals, trim badges, bodywork, wheels, and roll cage. No hallucinations or incorrect badging detected.",
+  "photorealism_score": 25,
+  "photorealism_notes": "Ray-traced floor reflections are geometrically accurate. Soft ambient occlusion contact shadows are present under all tires, and lighting is consistent with overhead ceiling fixtures.",
+  "dealer_branding_score": 15,
+  "dealer_branding_notes": "The 'Malcolm Smith Motorsports' logo is rendered as realistic 3D architectural signage on the showroom wall, not a flat 2D watermark.",
+  "recommendations": "The most critical issue is the presence of a competitor's vehicle (Kawasaki Teryx KRX 1000) in the showroom image. This must be removed or replaced with a Polaris product to comply with advertising standards. No other issues were found with the target vehicle's representation, photorealism, or dealer branding."
+}

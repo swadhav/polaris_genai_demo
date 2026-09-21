@@ -1,0 +1,13 @@
+{
+  "total_score": 95,
+  "passed": true,
+  "competitor_ip_detected": false,
+  "competitor_ip_details": "",
+  "vehicle_entity_score": 35,
+  "vehicle_entity_notes": "Paint color, decals, trim badges, bodywork, wheels, and roll cage are 100% faithful to the reference image. No hallucinations or incorrect badging detected.",
+  "photorealism_score": 25,
+  "photorealism_notes": "Floor reflections are geometrically accurate. Soft ambient occlusion contact shadows are present under all tires, grounding the vehicle. Lighting is consistent with overhead ceiling fixtures.",
+  "dealer_branding_score": 10,
+  "dealer_branding_notes": "The Power Lodge logo is placed on a 3D wooden structure, which is better than a floating watermark. However, the logo itself appears to be a 2D texture applied to the surface rather than a fully integrated 3D architectural sign with depth and consistent lighting.",
+  "recommendations": "To achieve full points for dealer branding, ensure the Power Lodge logo is rendered as a truly 3D architectural sign, with depth and lighting that fully integrates it into the showroom environment, rather than appearing as a 2D texture on a 3D object."
+}

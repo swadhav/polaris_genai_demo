@@ -1,0 +1,13 @@
+{
+  "total_score": 95,
+  "passed": true,
+  "competitor_ip_detected": false,
+  "competitor_ip_details": "",
+  "vehicle_entity_score": 35,
+  "vehicle_entity_notes": "Paint color precisely matches factory Matte Mocha. Model decals, trim badges, bodywork, wheels, and roll cage are 100% faithful to the reference image with no detected hallucination or incorrect badging.",
+  "photorealism_score": 20,
+  "photorealism_notes": "Floor reflections are present and geometrically plausible, but could be slightly sharper and more defined for perfect accuracy. Soft ambient occlusion contact shadows are present under all tires. Lighting is consistent with overhead ceiling fixtures.",
+  "dealer_branding_score": 15,
+  "dealer_branding_notes": "The 'Bills Service Center' logo is rendered as realistic 3D architectural signage on the showroom wall, showing appropriate depth and shadows, not appearing as a flat 2D watermark.",
+  "recommendations": "To achieve a perfect photorealism score, enhance the sharpness and geometric accuracy of the floor reflections to better mirror the vehicle's form and details."
+}

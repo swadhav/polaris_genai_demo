@@ -1,0 +1,13 @@
+{
+  "total_score": 58,
+  "passed": false,
+  "competitor_ip_detected": true,
+  "competitor_ip_details": "Kawasaki logo visible on the green UTV (left) and green motorcycle (right). Honda wing logo visible on the red/white/blue motorcycle (right).",
+  "vehicle_entity_score": 20,
+  "vehicle_entity_notes": "Paint color (Matte Mocha) matches the reference. However, the 'XP 1000' decal on the side is rendered as 'XP' only, missing '1000'. The 'POLARIS' branding on the lower side panel is absent in Image 1. The front winch present in Image 2 is also missing in Image 1. These are significant deviations from 100% faithfulness.",
+  "photorealism_score": 23,
+  "photorealism_notes": "Ray-traced floor reflections are present and geometrically plausible, though slightly soft. Soft ambient occlusion contact shadows are correctly rendered under all tires. Lighting is consistent with overhead fixtures.",
+  "dealer_branding_score": 15,
+  "dealer_branding_notes": "The 'Malcolm Smith Motorsports' logo is rendered as realistic 3D architectural signage on the showroom wall, with appropriate depth and shadows, not a flat 2D watermark.",
+  "recommendations": "Immediately remove all competitor vehicles and branding (Kawasaki, Honda) from the showroom scene, as their presence results in an automatic fail. Ensure the target Polaris XPEDITION XP Crew NorthStar is rendered with 100% fidelity to the reference, including all decals ('XP 1000'), badging ('POLARIS' on side), and accessories (front winch)."
+}

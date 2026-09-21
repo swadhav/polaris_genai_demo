@@ -1,0 +1,13 @@
+{
+  "total_score": 98,
+  "passed": true,
+  "competitor_ip_detected": false,
+  "competitor_ip_details": "",
+  "vehicle_entity_score": 35,
+  "vehicle_entity_notes": "The paint color precisely matches the factory Stealth Gray. All model decals ('500', 'POLARIS', 'RANGER'), trim badges, bodywork, wheels, and the roll cage are 100% faithful to the reference Image 2 with zero hallucination or incorrect badging.",
+  "photorealism_score": 23,
+  "photorealism_notes": "Ray-traced floor reflections are present and geometrically accurate to the vehicle, though they appear slightly diffused. Soft ambient occlusion contact shadows are present under all tires, ensuring the vehicle does not appear to be floating. Lighting is consistent with the visible overhead ceiling fixtures.",
+  "dealer_branding_score": 15,
+  "dealer_branding_notes": "The Power Lodge logo is rendered as realistic 3D architectural signage on the showroom wall, exhibiting appropriate depth, texture, and lighting interaction, not appearing as a flat 2D floating watermark.",
+  "recommendations": "The image is of excellent quality and fully compliant with all specified criteria. No specific recommendations for improvement are necessary."
+}

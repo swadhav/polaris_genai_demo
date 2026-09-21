@@ -1,0 +1,13 @@
+{
+  "total_score": 100,
+  "passed": true,
+  "competitor_ip_detected": false,
+  "competitor_ip_details": "",
+  "vehicle_entity_score": 35,
+  "vehicle_entity_notes": "Paint color precisely matches factory Matte Granite Gray. Model decals ('RZR', 'PRO XP', 'POLARIS'), bodywork, wheels, and roll cage are 100% faithful to the reference image with no apparent hallucination or incorrect badging.",
+  "photorealism_score": 25,
+  "photorealism_notes": "Ray-traced floor reflections are geometrically accurate and consistent with the vehicle's form. Soft ambient occlusion contact shadows are present under all tires, ensuring the vehicle does not appear to float. Lighting is consistent with overhead ceiling fixtures, providing realistic illumination.",
+  "dealer_branding_score": 15,
+  "dealer_branding_notes": "The 'Power Lodge' logo is rendered as realistic 3D architectural signage on a wooden wall, not a flat 2D watermark, and is well-integrated into the scene with appropriate lighting and shadows.",
+  "recommendations": "The AI-generated image meets all audit criteria with excellent quality. No recommendations for improvement are necessary."
+}
