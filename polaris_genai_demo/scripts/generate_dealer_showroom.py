@@ -129,6 +129,7 @@ class DealerShowroomAgent:
         location: str = DEFAULT_LOCATION,
         nano_banana_model: str = NANO_BANANA_MODEL,
         max_concurrency: int = 2,
+        bucket_name: Optional[str] = None,
     ):
         self.project_root = project_root or Path(__file__).resolve().parent.parent
         self.dealers_dir = self.project_root / "dealers"
@@ -137,6 +138,7 @@ class DealerShowroomAgent:
         self.location = location
         self.nano_banana_model = nano_banana_model
         self.max_concurrency = max_concurrency
+        self.bucket_name = bucket_name or os.getenv("DEFAULT_BUCKET", os.getenv("GCS_BUCKET", "polaris-demo-files"))
         self.evaluator = ShowroomImageEvaluator(
             project_id=project_id,
             location=location,
@@ -144,11 +146,90 @@ class DealerShowroomAgent:
         self._cached_token = None
         self._token_expiry = 0
 
+    def upload_to_gcs(self, local_path: Path, gcs_path: str, content_type: str = "image/png") -> bool:
+        """Uploads a local file to GCS bucket using Google Cloud Storage API."""
+        token = self.get_token()
+        if not token:
+            logger.warning(f"No token available to upload {gcs_path} to GCS")
+            return False
+        import urllib.parse
+        url = f"https://storage.googleapis.com/upload/storage/v1/b/{self.bucket_name}/o?uploadType=media&name={urllib.parse.quote(gcs_path, safe='')}"
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": content_type,
+        }
+        try:
+            with open(local_path, "rb") as f:
+                data = f.read()
+            resp = requests.post(url, headers=headers, data=data, timeout=60)
+            if resp.status_code in [200, 201]:
+                logger.info(f"Uploaded gs://{self.bucket_name}/{gcs_path} ({len(data)} bytes)")
+                return True
+            else:
+                logger.warning(f"Failed to upload gs://{self.bucket_name}/{gcs_path}: {resp.status_code} - {resp.text}")
+                return False
+        except Exception as exc:
+            logger.warning(f"Exception uploading gs://{self.bucket_name}/{gcs_path}: {exc}")
+            return False
+
+    def download_from_gcs(self, gcs_path: str, local_path: Path) -> bool:
+        """Downloads a file from GCS bucket if not present locally."""
+        if local_path.exists() and local_path.stat().st_size > 0:
+            return True
+        token = self.get_token()
+        import urllib.parse
+        url = f"https://storage.googleapis.com/storage/v1/b/{self.bucket_name}/o/{urllib.parse.quote(gcs_path, safe='')}?alt=media"
+        headers = {"Authorization": f"Bearer {token}"} if token else {}
+        try:
+            resp = requests.get(url, headers=headers, timeout=30)
+            if resp.status_code == 200:
+                local_path.parent.mkdir(parents=True, exist_ok=True)
+                with open(local_path, "wb") as f:
+                    f.write(resp.content)
+                logger.info(f"Downloaded gs://{self.bucket_name}/{gcs_path} -> {local_path} ({len(resp.content)} bytes)")
+                return True
+            return False
+        except Exception as exc:
+            logger.warning(f"Failed to download gs://{self.bucket_name}/{gcs_path}: {exc}")
+            return False
+
     def get_token(self) -> str:
         now = time.time()
         if self._cached_token and now < self._token_expiry:
             return self._cached_token
 
+        # 1. Try google-auth
+        try:
+            import google.auth
+            import google.auth.transport.requests
+            creds, _ = google.auth.default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
+            auth_req = google.auth.transport.requests.Request()
+            creds.refresh(auth_req)
+            if creds.token:
+                self._cached_token = creds.token
+                self._token_expiry = now + 1800
+                return self._cached_token
+        except Exception:
+            pass
+
+        # 2. Try GCP Compute / Cloud Run Instance Metadata Server
+        try:
+            import urllib.request
+            req = urllib.request.Request(
+                "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token",
+                headers={"Metadata-Flavor": "Google"}
+            )
+            with urllib.request.urlopen(req, timeout=2) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                tok = data.get("access_token")
+                if tok:
+                    self._cached_token = tok
+                    self._token_expiry = now + 1800
+                    return self._cached_token
+        except Exception:
+            pass
+
+        # 3. Fallback to gcloud CLI
         try:
             res = subprocess.run(
                 ["gcloud", "auth", "print-access-token"],
@@ -167,11 +248,31 @@ class DealerShowroomAgent:
     # Discovery Engine (Scales from 5 up to 300+ Dealers)
     # -------------------------------------------------------------------------
     def discover_dealers(self) -> Dict[str, DealerInfo]:
-        """Scans the dealers directory and categorizes each dealer's assets."""
+        """Scans the dealers directory and GCS bucket, categorizing each dealer's assets."""
         dealers: Dict[str, DealerInfo] = {}
-        if not self.dealers_dir.exists():
-            logger.warning(f"Dealers directory not found: {self.dealers_dir}")
-            return dealers
+        self.dealers_dir.mkdir(parents=True, exist_ok=True)
+
+        # Sync assets from GCS if needed
+        token = self.get_token()
+        if token:
+            try:
+                url = f"https://storage.googleapis.com/storage/v1/b/{self.bucket_name}/o?prefix=dealers/"
+                headers = {"Authorization": f"Bearer {token}"}
+                resp = requests.get(url, headers=headers, timeout=10)
+                if resp.status_code == 200:
+                    items = resp.json().get("items", [])
+                    for item in items:
+                        name = item.get("name", "")
+                        parts = name.split("/")
+                        if len(parts) >= 2 and parts[1]:
+                            did = parts[1]
+                            fname = parts[-1]
+                            if fname and ("logo" in fname.lower() or "background" in fname.lower() or fname.startswith("dealer background")):
+                                d_dir = self.dealers_dir / did
+                                d_dir.mkdir(parents=True, exist_ok=True)
+                                self.download_from_gcs(name, d_dir / fname)
+            except Exception as exc:
+                logger.warning(f"GCS dealer discovery warning: {exc}")
 
         for d in sorted(self.dealers_dir.iterdir()):
             if not d.is_dir() or d.name.startswith("."):
@@ -211,11 +312,30 @@ class DealerShowroomAgent:
         return dealers
 
     def discover_models(self) -> Dict[str, VehicleInfo]:
-        """Scans the models directory and categorizes angle renders and metadata."""
+        """Scans the models directory and GCS bucket, categorizing angle renders and metadata."""
         models: Dict[str, VehicleInfo] = {}
-        if not self.models_dir.exists():
-            logger.warning(f"Models directory not found: {self.models_dir}")
-            return models
+        self.models_dir.mkdir(parents=True, exist_ok=True)
+
+        token = self.get_token()
+        if token:
+            try:
+                url = f"https://storage.googleapis.com/storage/v1/b/{self.bucket_name}/o?prefix=models/"
+                headers = {"Authorization": f"Bearer {token}"}
+                resp = requests.get(url, headers=headers, timeout=10)
+                if resp.status_code == 200:
+                    items = resp.json().get("items", [])
+                    for item in items:
+                        name = item.get("name", "")
+                        parts = name.split("/")
+                        if len(parts) >= 3 and parts[1]:
+                            mid = parts[1]
+                            fname = parts[-1]
+                            if fname.lower().endswith((".jpg", ".jpeg", ".png")):
+                                m_dir = self.models_dir / mid
+                                m_dir.mkdir(parents=True, exist_ok=True)
+                                self.download_from_gcs(name, m_dir / fname)
+            except Exception as exc:
+                logger.warning(f"GCS models discovery warning: {exc}")
 
         for d in sorted(self.models_dir.iterdir()):
             if not d.is_dir() or d.name.startswith("."):
@@ -344,6 +464,14 @@ class DealerShowroomAgent:
             f.write(image_bytes)
 
         logger.info(f"[{dealer.dealer_id}] Clean architectural plate saved: {target_path} ({len(image_bytes)} bytes)")
+        
+        # Upload clean plate to GCS
+        self.upload_to_gcs(
+            target_path,
+            f"dealers/{dealer.dealer_id}/clean_showroom_plate.png",
+            "image/png"
+        )
+        
         dealer.clean_plate_path = target_path
         return target_path
 
@@ -453,6 +581,18 @@ class DealerShowroomAgent:
             f.write(image_bytes)
         logger.info(f"[{dealer.dealer_id}] Successfully generated hero image: {output_image_path} ({len(image_bytes)} bytes)")
 
+        # Upload generated showroom image to GCS
+        self.upload_to_gcs(
+            output_image_path,
+            f"dealers/{dealer.dealer_id}/generated/{vehicle.model_id}_showroom.png",
+            "image/png"
+        )
+        self.upload_to_gcs(
+            output_image_path,
+            f"dealers/{dealer.dealer_id}/generated/{vehicle.model_id}/{vehicle.model_id}_showroom.png",
+            "image/png"
+        )
+
         # 6. Autonomous Multimodal QA Audit
         if not skip_qa:
             try:
@@ -467,6 +607,18 @@ class DealerShowroomAgent:
                 with open(output_eval_path, "w") as f:
                     json.dump(qa_res, f, indent=2)
                 logger.info(f"[{dealer.dealer_id}] QA Audit saved: {output_eval_path}")
+
+                # Upload evaluation JSON to GCS
+                self.upload_to_gcs(
+                    output_eval_path,
+                    f"dealers/{dealer.dealer_id}/generated/{vehicle.model_id}_evaluation.json",
+                    "application/json"
+                )
+                self.upload_to_gcs(
+                    output_eval_path,
+                    f"dealers/{dealer.dealer_id}/generated/{vehicle.model_id}/{vehicle.model_id}_evaluation.json",
+                    "application/json"
+                )
             except Exception as e:
                 logger.warning(f"[{dealer.dealer_id}][{vehicle.model_id}] QA Evaluation warning: {e}")
 

@@ -53,6 +53,38 @@ class ShowroomImageEvaluator:
         if self._cached_token and now < self._token_expiry:
             return self._cached_token
 
+        # 1. Try google-auth
+        try:
+            import google.auth
+            import google.auth.transport.requests
+            creds, _ = google.auth.default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
+            auth_req = google.auth.transport.requests.Request()
+            creds.refresh(auth_req)
+            if creds.token:
+                self._cached_token = creds.token
+                self._token_expiry = now + 1800
+                return self._cached_token
+        except Exception:
+            pass
+
+        # 2. Try GCP Compute / Cloud Run Instance Metadata Server
+        try:
+            import urllib.request
+            req = urllib.request.Request(
+                "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token",
+                headers={"Metadata-Flavor": "Google"}
+            )
+            with urllib.request.urlopen(req, timeout=2) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                tok = data.get("access_token")
+                if tok:
+                    self._cached_token = tok
+                    self._token_expiry = now + 1800
+                    return self._cached_token
+        except Exception:
+            pass
+
+        # 3. Fallback to gcloud CLI
         try:
             res = subprocess.run(
                 ["gcloud", "auth", "print-access-token"],

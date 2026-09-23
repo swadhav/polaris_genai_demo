@@ -1,5 +1,5 @@
 import React from 'react';
-import { Store, ShieldCheck, ChevronDown, CheckCircle2 } from 'lucide-react';
+import { Store, ShieldCheck, ChevronDown, CheckCircle2, Bot } from 'lucide-react';
 
 export default function Header({
   selectedModel,
@@ -56,6 +56,13 @@ export default function Header({
               </div>
             </div>
           )}
+
+          {/* Agent Registry Badge */}
+          <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-slate-900/90 border border-slate-800 rounded-lg text-slate-300">
+            <Bot className="w-3.5 h-3.5 text-indigo-400" />
+            <span className="font-mono text-[11px] text-slate-400">Agent Registry:</span>
+            <span className="font-mono text-[11px] text-indigo-300 font-semibold">5 Active Agents</span>
+          </div>
 
           {/* GCS Bucket Badge */}
           <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900/90 border border-slate-800 rounded-lg text-slate-300">

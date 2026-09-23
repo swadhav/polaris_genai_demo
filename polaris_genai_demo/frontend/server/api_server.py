@@ -89,7 +89,7 @@ MODEL_METADATA = {
 }
 
 class GCSAuthManager:
-    """Manages GCP access tokens via gcloud CLI with caching."""
+    """Manages GCP access tokens via Google Cloud metadata server, google-auth, and gcloud CLI with caching."""
     def __init__(self):
         self._cached_token = None
         self._token_expiry = 0
@@ -99,6 +99,40 @@ class GCSAuthManager:
         if self._cached_token and now < self._token_expiry:
             return self._cached_token
 
+        # 1. Try google-auth library if available
+        try:
+            import google.auth
+            import google.auth.transport.requests
+            creds, _ = google.auth.default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
+            auth_req = google.auth.transport.requests.Request()
+            creds.refresh(auth_req)
+            if creds.token:
+                self._cached_token = creds.token
+                self._token_expiry = now + 1800
+                logger.info("Successfully refreshed access token via google-auth")
+                return self._cached_token
+        except Exception:
+            pass
+
+        # 2. Try GCP Compute / Cloud Run Instance Metadata Server
+        try:
+            import urllib.request
+            req = urllib.request.Request(
+                "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token",
+                headers={"Metadata-Flavor": "Google"}
+            )
+            with urllib.request.urlopen(req, timeout=2) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                tok = data.get("access_token")
+                if tok:
+                    self._cached_token = tok
+                    self._token_expiry = now + 1800
+                    logger.info("Successfully refreshed access token via GCP metadata server")
+                    return self._cached_token
+        except Exception:
+            pass
+
+        # 3. Fallback to gcloud CLI (local development)
         try:
             res = subprocess.run(
                 ["gcloud", "auth", "print-access-token"],
@@ -115,6 +149,35 @@ class GCSAuthManager:
             return ""
 
 auth_manager = GCSAuthManager()
+
+
+def upload_to_gcs(data_or_path, gcs_object_path: str, content_type: str = "image/jpeg") -> bool:
+    """Uploads bytes or a local file to GCS."""
+    token = auth_manager.get_token()
+    if not token:
+        logger.warning(f"No token available for GCS upload: {gcs_object_path}")
+        return False
+    url = f"https://storage.googleapis.com/upload/storage/v1/b/{DEFAULT_BUCKET}/o?uploadType=media&name={quote(gcs_object_path, safe='')}"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": content_type,
+    }
+    if isinstance(data_or_path, (str, Path)):
+        with open(data_or_path, "rb") as f:
+            data = f.read()
+    else:
+        data = data_or_path
+    try:
+        resp = requests.post(url, headers=headers, data=data, timeout=60)
+        if resp.status_code in [200, 201]:
+            logger.info(f"Successfully uploaded gs://{DEFAULT_BUCKET}/{gcs_object_path} ({len(data)} bytes)")
+            return True
+        else:
+            logger.warning(f"Failed to upload gs://{DEFAULT_BUCKET}/{gcs_object_path}: {resp.status_code} - {resp.text}")
+            return False
+    except Exception as exc:
+        logger.warning(f"Exception during GCS upload gs://{DEFAULT_BUCKET}/{gcs_object_path}: {exc}")
+        return False
 
 
 def classify_angle(filename: str) -> str:
@@ -154,14 +217,23 @@ def get_models_catalog():
         })
 
         # Static images: up to 5 static images (exclude tif and video files)
-        # Prefer JPG / PNG
-        image_candidates = []
-        for f in sorted(mdir.iterdir()):
-            if f.suffix.lower() in [".jpg", ".jpeg", ".png"] and not f.name.startswith("output"):
-                image_candidates.append(f.name)
+        image_candidates = [
+            f.name for f in mdir.iterdir()
+            if f.is_file() and f.suffix.lower() in [".jpg", ".jpeg", ".png"]
+            and not f.name.startswith(".")
+        ]
 
-        # Order images logically: 3/4 Front, Front, Profile, Dash/Rear, Top-Down
-        angle_order = ["3/4 Front View", "Front View", "Left Profile View", "Rear View", "Interior Dashboard", "Top-Down View"]
+        # Prioritize angles
+        angle_order = [
+            "3/4 Front View",
+            "Front View",
+            "Left Profile View",
+            "Rear View",
+            "Top-Down View",
+            "Interior Dashboard",
+            "Angle View",
+        ]
+
         ranked_images = []
         for f_name in image_candidates:
             label = classify_angle(f_name)
@@ -273,33 +345,48 @@ def get_dealers_catalog():
                     "generated_models": sorted(gen_models),
                 }
 
-    # 2. Query GCS prefixes to ensure all folders under gs://polaris-demo-files/dealers/ are included
+    # 2. Query GCS objects to ensure all folders and generated assets under gs://polaris-demo-files/dealers/ are included
     token = auth_manager.get_token()
     if token:
         try:
-            url = f"https://storage.googleapis.com/storage/v1/b/{DEFAULT_BUCKET}/o?prefix=dealers/&delimiter=/"
+            url = f"https://storage.googleapis.com/storage/v1/b/{DEFAULT_BUCKET}/o?prefix=dealers/"
             headers = {"Authorization": f"Bearer {token}"}
-            resp = requests.get(url, headers=headers, timeout=5)
+            resp = requests.get(url, headers=headers, timeout=8)
             if resp.status_code == 200:
                 data = resp.json()
-                for prefix in data.get("prefixes", []):
-                    parts = prefix.strip("/").split("/")
-                    if len(parts) >= 2:
+                for item in data.get("items", []):
+                    name = item.get("name", "")
+                    parts = name.split("/")
+                    if len(parts) >= 2 and parts[1]:
                         did = parts[1]
-                        if did and did not in dealers_map:
+                        if did not in dealers_map:
                             dealers_map[did] = {
                                 "id": did,
                                 "name": friendly_names.get(did, did.replace("_", " ").title()),
                                 "folder_name": did,
                                 "has_background": False,
+                                "background_url": None,
                                 "has_logo": False,
                                 "logo_url": None,
                                 "generated_models": [],
                             }
+                        fname = parts[-1].lower()
+                        if "background" in fname or fname.startswith("dealer background"):
+                            dealers_map[did]["has_background"] = True
+                            dealers_map[did]["background_url"] = f"/api/dealers/{did}/background"
+                        if "logo" in fname:
+                            dealers_map[did]["has_logo"] = True
+                            dealers_map[did]["logo_url"] = f"/api/dealers/{did}/logo"
+                        if fname.endswith("_showroom.png"):
+                            mid = parts[-1].replace("_showroom.png", "")
+                            if mid not in dealers_map[did]["generated_models"]:
+                                dealers_map[did]["generated_models"].append(mid)
         except Exception as exc:
-            logger.warning(f"Could not query GCS for dealer prefixes: {exc}")
+            logger.warning(f"Could not query GCS for dealers: {exc}")
 
     # Return dealers sorted alphabetically by folder name
+    for did in dealers_map:
+        dealers_map[did]["generated_models"] = sorted(dealers_map[did]["generated_models"])
     return sorted(dealers_map.values(), key=lambda x: x["folder_name"])
 
 
@@ -364,6 +451,68 @@ class PolarisHandler(BaseHTTPRequestHandler):
                     "project": DEFAULT_PROJECT,
                     "bucket": DEFAULT_BUCKET,
                     "timestamp": time.time(),
+                }).encode("utf-8"))
+            return
+
+        # Agents Registry catalog endpoint
+        if path == "/api/agents":
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_cors_headers()
+            self.end_headers()
+            if not is_head:
+                agents_data = [
+                    {
+                        "id": "polaris-vehicle-360-agent",
+                        "display_name": "Polaris Vehicle 360 Rotation Agent",
+                        "type": "Primary Agent",
+                        "model": "veo-3.1-generate-001",
+                        "endpoint": "/api/models",
+                        "registry_resource": "projects/416490439030/locations/us-central1/agents/agentregistry-00000000-0000-0000-95d5-81ee5412d9e0",
+                        "status": "ACTIVE",
+                    },
+                    {
+                        "id": "polaris-dealer-showroom-agent",
+                        "display_name": "Polaris Dealer Showroom Staging Agent",
+                        "type": "Primary Agent",
+                        "model": "gemini-2.5-flash-image + gemini-2.5-flash",
+                        "endpoint": "/api/dealers",
+                        "registry_resource": "projects/416490439030/locations/us-central1/agents/agentregistry-00000000-0000-0000-fa86-3102a09015a4",
+                        "status": "ACTIVE",
+                    },
+                    {
+                        "id": "polaris-showroom-inpainting-agent",
+                        "display_name": "Showroom Inpainting & Architectural Clean-Up Sub-Agent",
+                        "type": "Sub-Agent (Stage 1)",
+                        "model": "gemini-2.5-flash-image",
+                        "endpoint": "/api/dealers/clean-plate",
+                        "registry_resource": "projects/416490439030/locations/us-central1/agents/agentregistry-00000000-0000-0000-bfba-97cacb358e7f",
+                        "status": "ACTIVE",
+                    },
+                    {
+                        "id": "polaris-showroom-staging-agent",
+                        "display_name": "Multi-Reference Vehicle Staging & 3D Signage Sub-Agent",
+                        "type": "Sub-Agent (Stage 2)",
+                        "model": "gemini-2.5-flash-image",
+                        "endpoint": "/api/dealers/stage",
+                        "registry_resource": "projects/416490439030/locations/us-central1/agents/agentregistry-00000000-0000-0000-855d-31d06b62c0e4",
+                        "status": "ACTIVE",
+                    },
+                    {
+                        "id": "polaris-showroom-qa-evaluator",
+                        "display_name": "Multimodal QA & Compliance Auditor Sub-Agent",
+                        "type": "Sub-Agent (Stage 3)",
+                        "model": "gemini-2.5-flash",
+                        "endpoint": "/api/dealers/evaluate",
+                        "registry_resource": "projects/416490439030/locations/us-central1/agents/agentregistry-00000000-0000-0000-c280-218726c27953",
+                        "status": "ACTIVE",
+                    },
+                ]
+                self.wfile.write(json.dumps({
+                    "agents": agents_data,
+                    "project": DEFAULT_PROJECT,
+                    "location": "us-central1",
+                    "total": len(agents_data),
                 }).encode("utf-8"))
             return
 
@@ -632,7 +781,7 @@ class PolarisHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def serve_dealer_logo(self, dealer_id: str, is_head=False):
-        """Serves dealer logo from local dealers folder or 404."""
+        """Serves dealer logo from local dealers folder or GCS."""
         dealer_dir = DEALERS_DIR / dealer_id
         if dealer_dir.exists():
             logos = [f for f in dealer_dir.iterdir() if "logo" in f.name.lower() and f.suffix.lower() in [".png", ".jpg", ".jpeg"]]
@@ -653,6 +802,36 @@ class PolarisHandler(BaseHTTPRequestHandler):
                             self.wfile.write(chunk)
                 return
 
+        # GCS proxy check
+        token = auth_manager.get_token()
+        if token:
+            try:
+                url = f"https://storage.googleapis.com/storage/v1/b/{DEFAULT_BUCKET}/o?prefix=dealers/{quote(dealer_id, safe='')}/"
+                headers = {"Authorization": f"Bearer {token}"}
+                resp = requests.get(url, headers=headers, timeout=8)
+                if resp.status_code == 200:
+                    for item in resp.json().get("items", []):
+                        name = item.get("name", "")
+                        fname = name.split("/")[-1].lower()
+                        if "logo" in fname and fname.endswith((".png", ".jpg", ".jpeg", ".svg")):
+                            gcs_url = f"https://storage.googleapis.com/storage/v1/b/{DEFAULT_BUCKET}/o/{quote(name, safe='')}?alt=media"
+                            img_resp = requests.get(gcs_url, headers=headers, stream=True, timeout=15)
+                            if img_resp.status_code == 200:
+                                self.send_response(200)
+                                self.send_cors_headers()
+                                self.send_header("Content-Type", img_resp.headers.get("Content-Type", "image/png"))
+                                if "Content-Length" in img_resp.headers:
+                                    self.send_header("Content-Length", img_resp.headers["Content-Length"])
+                                self.send_header("Cache-Control", "public, max-age=86400")
+                                self.end_headers()
+                                if not is_head:
+                                    for chunk in img_resp.iter_content(65536):
+                                        if chunk:
+                                            self.wfile.write(chunk)
+                                return
+            except Exception as exc:
+                logger.warning(f"Failed to fetch logo for {dealer_id} from GCS: {exc}")
+
         # 404
         self.send_response(404)
         self.send_cors_headers()
@@ -662,7 +841,7 @@ class PolarisHandler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps({"error": f"Logo not found for dealer {dealer_id}"}).encode("utf-8"))
 
     def serve_dealer_background(self, dealer_id: str, is_head=False):
-        """Serves raw dealer background photo from local dealers folder or 404."""
+        """Serves raw dealer background photo from local dealers folder or GCS."""
         dealer_dir = DEALERS_DIR / dealer_id
         if dealer_dir.exists():
             bg_files = [
@@ -686,6 +865,36 @@ class PolarisHandler(BaseHTTPRequestHandler):
                         while chunk := f.read(65536):
                             self.wfile.write(chunk)
                 return
+
+        # GCS proxy check
+        token = auth_manager.get_token()
+        if token:
+            try:
+                url = f"https://storage.googleapis.com/storage/v1/b/{DEFAULT_BUCKET}/o?prefix=dealers/{quote(dealer_id, safe='')}/"
+                headers = {"Authorization": f"Bearer {token}"}
+                resp = requests.get(url, headers=headers, timeout=8)
+                if resp.status_code == 200:
+                    for item in resp.json().get("items", []):
+                        name = item.get("name", "")
+                        fname = name.split("/")[-1].lower()
+                        if ("background" in fname or fname.startswith("dealer background")) and fname.endswith((".jpg", ".jpeg", ".png")):
+                            gcs_url = f"https://storage.googleapis.com/storage/v1/b/{DEFAULT_BUCKET}/o/{quote(name, safe='')}?alt=media"
+                            img_resp = requests.get(gcs_url, headers=headers, stream=True, timeout=15)
+                            if img_resp.status_code == 200:
+                                self.send_response(200)
+                                self.send_cors_headers()
+                                self.send_header("Content-Type", img_resp.headers.get("Content-Type", "image/jpeg"))
+                                if "Content-Length" in img_resp.headers:
+                                    self.send_header("Content-Length", img_resp.headers["Content-Length"])
+                                self.send_header("Cache-Control", "no-cache, must-revalidate")
+                                self.end_headers()
+                                if not is_head:
+                                    for chunk in img_resp.iter_content(65536):
+                                        if chunk:
+                                            self.wfile.write(chunk)
+                                return
+            except Exception as exc:
+                logger.warning(f"Failed to fetch background for {dealer_id} from GCS: {exc}")
 
         self.send_response(404)
         self.send_cors_headers()
@@ -750,7 +959,7 @@ class PolarisHandler(BaseHTTPRequestHandler):
 
     def handle_dealer_upload_background(self, dealer_id: str):
         """
-        Receives uploaded dealer background image, saves to dealers/<dealer_id>/dealer background.jpg,
+        Receives uploaded dealer background image, saves to dealers/<dealer_id>/dealer background.jpg locally and on GCS,
         and executes generate_dealer_showroom.py for the selected model.
         """
         fields, files = self.parse_post_data()
@@ -779,7 +988,7 @@ class PolarisHandler(BaseHTTPRequestHandler):
         dealer_dir = DEALERS_DIR / dealer_id
         dealer_dir.mkdir(parents=True, exist_ok=True)
 
-        # Remove existing background files to avoid conflict
+        # Remove existing local background files to avoid conflict
         for f in dealer_dir.iterdir():
             if f.is_file() and ("background" in f.name.lower() or f.name.lower().startswith("dealer background")):
                 try:
@@ -787,7 +996,7 @@ class PolarisHandler(BaseHTTPRequestHandler):
                 except Exception as e:
                     logger.warning(f"Could not remove old background file {f}: {e}")
 
-        # Save new background image as 'dealer background.jpg'
+        # Save new background image as 'dealer background.jpg' locally
         bg_path = dealer_dir / "dealer background.jpg"
         try:
             with Image.open(BytesIO(image_data)) as img:
@@ -798,6 +1007,10 @@ class PolarisHandler(BaseHTTPRequestHandler):
             logger.warning(f"PIL save failed, writing raw bytes: {e}")
             with open(bg_path, "wb") as f:
                 f.write(image_data)
+
+        # Upload background image to GCS under gs://<bucket>/dealers/<dealer_id>/dealer background.jpg
+        gcs_bg_key = f"dealers/{dealer_id}/dealer background.jpg"
+        upload_to_gcs(bg_path, gcs_bg_key, content_type="image/jpeg")
 
         # Remove old clean_showroom_plate.png if present so clean plate is regenerated
         old_plate = dealer_dir / "clean_showroom_plate.png"
