@@ -1,0 +1,13 @@
+{
+  "total_score": 75,
+  "passed": false,
+  "competitor_ip_detected": true,
+  "competitor_ip_details": "A Kawasaki Teryx KRX 1000 with visible Kawasaki and KRX logos is present on the left side of the image.",
+  "vehicle_entity_score": 35,
+  "vehicle_entity_notes": "The 2027 RANGER XD 1500 Crew NorthStar Ultimate precisely matches the reference render in paint color (Polaris Pursuit Camo), bodywork, wheels, roll cage, and badging (Polaris, RANGER XD 1500, NorthStar Ultimate).",
+  "photorealism_score": 25,
+  "photorealism_notes": "Ray-traced floor reflections are geometrically accurate. Soft ambient occlusion contact shadows are present under all tires, grounding the vehicle. Lighting is consistent with the overhead ceiling fixtures, creating a realistic showroom environment.",
+  "dealer_branding_score": 15,
+  "dealer_branding_notes": "The 'Malcolm Smith MOTORSPORTS' logo is rendered as realistic 3D architectural signage on the showroom wall, not a flat 2D watermark, with appropriate depth and lighting.",
+  "recommendations": "Immediately remove the competitor vehicle (Kawasaki Teryx KRX 1000) and its branding from the image. The presence of competitor IP results in an automatic compliance failure and a score of 0 for that criterion. Ensure all advertising materials exclusively feature Polaris products."
+}

@@ -1,0 +1,13 @@
+{
+  "total_score": 100,
+  "passed": true,
+  "competitor_ip_detected": false,
+  "competitor_ip_details": "",
+  "vehicle_entity_score": 35,
+  "vehicle_entity_notes": "The 2027 RZR Pro XP Sport in Image 1 precisely matches the factory Matte Granite Gray finish of the reference Image 2. All model decals ('RZR', 'PRO XP', 'POLARIS'), trim badges, bodywork, wheels, and the roll cage are 100% faithful to the reference with no detected hallucinations or incorrect badging.",
+  "photorealism_score": 25,
+  "photorealism_notes": "Ray-traced floor reflections are geometrically accurate to the vehicle. Soft ambient occlusion contact shadows are present under all tires, indicating proper ground contact. Lighting is consistent with the visible overhead ceiling fixtures, creating a realistic showroom environment.",
+  "dealer_branding_score": 15,
+  "dealer_branding_notes": "The 'Malcolm Smith Motorsports' logo is rendered as realistic 3D architectural signage on the showroom wall, exhibiting depth and appropriate shadows, rather than a flat 2D watermark.",
+  "recommendations": "The AI-generated image is of excellent quality and meets all specified audit criteria. No recommendations for improvement are necessary at this time."
+}

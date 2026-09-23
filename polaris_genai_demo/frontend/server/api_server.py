@@ -186,6 +186,8 @@ def get_models_catalog():
         # Target video name must match sample_360_rotation.mp4 as specified
         video_filename = "sample_360_rotation.mp4"
         gcs_video_uri = f"gs://{DEFAULT_BUCKET}/models/{model_id}/{video_filename}"
+        outdoor_video_filename = "outdoor_background_360.mp4"
+        gcs_outdoor_video_uri = f"gs://{DEFAULT_BUCKET}/models/{model_id}/{outdoor_video_filename}"
 
         catalog.append({
             "id": model_id,
@@ -199,6 +201,27 @@ def get_models_catalog():
                 "filename": video_filename,
                 "url": f"/api/models/{model_id}/video",
                 "gcs_uri": gcs_video_uri,
+            },
+            "outdoor_video": {
+                "filename": outdoor_video_filename,
+                "url": f"/api/models/{model_id}/video?variant=outdoor",
+                "gcs_uri": gcs_outdoor_video_uri,
+            },
+            "videos": {
+                "studio": {
+                    "id": "studio",
+                    "title": "Studio 360°",
+                    "filename": video_filename,
+                    "url": f"/api/models/{model_id}/video",
+                    "gcs_uri": gcs_video_uri,
+                },
+                "outdoor": {
+                    "id": "outdoor",
+                    "title": "Outdoor Background 360°",
+                    "filename": outdoor_video_filename,
+                    "url": f"/api/models/{model_id}/video?variant=outdoor",
+                    "gcs_uri": gcs_outdoor_video_uri,
+                },
             },
             "images": selected_images,
         })
@@ -327,6 +350,7 @@ class PolarisHandler(BaseHTTPRequestHandler):
     def handle_request(self, is_head=False):
         parsed = urlparse(self.path)
         path = unquote(parsed.path)
+        query = parse_qs(parsed.query)
 
         # Health endpoint
         if path == "/api/health":
@@ -401,11 +425,18 @@ class PolarisHandler(BaseHTTPRequestHandler):
             self.serve_dealer_evaluation(dealer_id, model_id, is_head=is_head)
             return
 
-        # Model 360 Video streaming: /api/models/<model_id>/video
-        video_match = re.match(r"^/api/models/([^/]+)/video/?$", path)
+        # Model 360 Video streaming: /api/models/<model_id>/video or /api/models/<model_id>/video/<variant>
+        video_match = re.match(r"^/api/models/([^/]+)/video(?:/([^/]+))?/?$", path)
         if video_match:
             model_id = video_match.group(1)
-            self.stream_video(model_id, is_head=is_head)
+            sub_path = video_match.group(2)
+            variant_param = query.get("variant", query.get("type", query.get("video", [None])))[0]
+            chosen = sub_path or variant_param or "rotation"
+            if chosen and any(k in chosen.lower() for k in ["outdoor", "background"]):
+                target_video = "outdoor_background_360.mp4"
+            else:
+                target_video = "sample_360_rotation.mp4"
+            self.stream_video(model_id, video_name=target_video, is_head=is_head)
             return
 
         # Model Static Image: /api/models/<model_id>/images/<filename>
@@ -436,10 +467,10 @@ class PolarisHandler(BaseHTTPRequestHandler):
         if not is_head:
             self.wfile.write(json.dumps({"error": "Not Found", "path": path}).encode("utf-8"))
 
-    def stream_video(self, model_id: str, is_head=False):
-        """Streams sample_360_rotation.mp4 directly from GCS with HTTP 206 Range support."""
+    def stream_video(self, model_id: str, video_name: str = "sample_360_rotation.mp4", is_head=False):
+        """Streams 360 rotation or outdoor video directly from GCS with HTTP 206 Range support."""
         token = auth_manager.get_token()
-        gcs_object = f"models/{model_id}/sample_360_rotation.mp4"
+        gcs_object = f"models/{model_id}/{video_name}"
         gcs_url = f"https://storage.googleapis.com/storage/v1/b/{DEFAULT_BUCKET}/o/{quote(gcs_object, safe='')}?alt=media"
 
         headers = {}
@@ -479,15 +510,21 @@ class PolarisHandler(BaseHTTPRequestHandler):
             logger.warning(f"Error proxying from GCS: {exc}")
 
         # Local fallback if GCS fails
-        self.stream_local_video_fallback(model_id, is_head=is_head)
+        self.stream_local_video_fallback(model_id, video_name=video_name, is_head=is_head)
 
-    def stream_local_video_fallback(self, model_id: str, is_head=False):
-        """Fallback to stream rotation video from local models/ directory."""
-        candidates = [
-            MODELS_DIR / model_id / "sample_360_rotation.mp4",
-            MODELS_DIR / model_id / "rotation_360.mp4",
-            MODELS_DIR / model_id / f"{model_id}_360_rotation.mp4",
-        ]
+    def stream_local_video_fallback(self, model_id: str, video_name: str = "sample_360_rotation.mp4", is_head=False):
+        """Fallback to stream rotation or outdoor video from local models/ directory."""
+        if "outdoor" in video_name:
+            candidates = [
+                MODELS_DIR / model_id / "outdoor_background_360.mp4",
+                MODELS_DIR / model_id / f"{model_id}_outdoor_background_360.mp4",
+            ]
+        else:
+            candidates = [
+                MODELS_DIR / model_id / "sample_360_rotation.mp4",
+                MODELS_DIR / model_id / "rotation_360.mp4",
+                MODELS_DIR / model_id / f"{model_id}_360_rotation.mp4",
+            ]
         local_path = None
         for c in candidates:
             if c.is_file():
@@ -500,7 +537,7 @@ class PolarisHandler(BaseHTTPRequestHandler):
             self.send_header("Content-Type", "application/json")
             self.end_headers()
             if not is_head:
-                self.wfile.write(json.dumps({"error": f"No 360 video found for model {model_id}"}).encode("utf-8"))
+                self.wfile.write(json.dumps({"error": f"No video {video_name} found for model {model_id}"}).encode("utf-8"))
             return
 
         file_size = local_path.stat().st_size

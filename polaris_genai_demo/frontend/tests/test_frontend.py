@@ -114,6 +114,51 @@ class TestPolarisFrontend(unittest.TestCase):
         self.assertIn("Polaris 360° Studio", res.text)
         self.assertIn('<div id="root"></div>', res.text)
 
+    def test_06_outdoor_background_360_video(self):
+        """Verify outdoor background 360 video catalog entries, streaming, and range requests."""
+        res = requests.get(f"{BASE_URL}/api/models", timeout=5)
+        self.assertEqual(res.status_code, 200)
+        models = res.json().get("models", [])
+        self.assertGreaterEqual(len(models), 5)
+
+        for model in models:
+            mid = model["id"]
+            self.assertIn("outdoor_video", model)
+            self.assertEqual(
+                model["outdoor_video"]["filename"],
+                "outdoor_background_360.mp4",
+                f"Model {mid} outdoor_video filename must be outdoor_background_360.mp4",
+            )
+            self.assertTrue(
+                model["outdoor_video"]["url"].startswith(f"/api/models/{mid}/video"),
+                f"Model {mid} outdoor_video url must start with /api/models/{mid}/video",
+            )
+
+        # Test video streaming for outdoor variant
+        test_model_id = "G27G5X99AZ"
+        outdoor_url = f"{BASE_URL}/api/models/{test_model_id}/video?variant=outdoor"
+
+        # HEAD request
+        head_res = requests.head(outdoor_url, timeout=10)
+        self.assertEqual(head_res.status_code, 200)
+        self.assertEqual(head_res.headers.get("Content-Type"), "video/mp4")
+        self.assertIn("Content-Length", head_res.headers)
+        total_length = int(head_res.headers["Content-Length"])
+        self.assertGreater(total_length, 1000000)
+
+        # Range request (bytes 0-1023)
+        range_res = requests.get(outdoor_url, headers={"Range": "bytes=0-1023"}, timeout=10)
+        self.assertIn(range_res.status_code, [200, 206])
+        if range_res.status_code == 206:
+            self.assertEqual(len(range_res.content), 1024)
+            self.assertIn("Content-Range", range_res.headers)
+
+        # Also test subpath syntax /api/models/<mid>/video/outdoor
+        subpath_res = requests.head(f"{BASE_URL}/api/models/{test_model_id}/video/outdoor", timeout=10)
+        self.assertEqual(subpath_res.status_code, 200)
+        self.assertEqual(subpath_res.headers.get("Content-Type"), "video/mp4")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+

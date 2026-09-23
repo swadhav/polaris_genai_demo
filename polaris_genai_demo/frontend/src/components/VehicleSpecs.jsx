@@ -41,10 +41,12 @@ export default function VehicleSpecs({ model }) {
       color: 'text-sky-400',
     },
     {
-      label: '360° Video Target',
-      value: model.video?.filename || 'sample_360_rotation.mp4',
+      label: '360° Video Options',
+      value: model.outdoor_video
+        ? 'Studio & Outdoor 360°'
+        : (model.video?.filename || 'sample_360_rotation.mp4'),
       icon: Film,
-      isMono: true,
+      isMono: !model.outdoor_video,
       color: 'text-cyan-400',
     },
     {

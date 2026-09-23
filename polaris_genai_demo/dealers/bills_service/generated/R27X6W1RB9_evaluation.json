@@ -1,0 +1,13 @@
+{
+  "total_score": 100,
+  "passed": true,
+  "competitor_ip_detected": false,
+  "competitor_ip_details": "",
+  "vehicle_entity_score": 35,
+  "vehicle_entity_notes": "The paint color precisely matches the factory Polaris Pursuit Camo. Model decals ('POLARIS'), bodywork, wheels, and roll cage are 100% faithful to the reference image with no hallucination or incorrect badging. The overall vehicle configuration matches the 2027 RANGER XD 1500 Crew NorthStar Ultimate.",
+  "photorealism_score": 25,
+  "photorealism_notes": "Ray-traced floor reflections are geometrically accurate to the vehicle. Soft ambient occlusion contact shadows are present under all tires, preventing a floating appearance. Lighting is consistent with the overhead ceiling fixtures, creating a realistic showroom environment.",
+  "dealer_branding_score": 15,
+  "dealer_branding_notes": "The 'Bills Service' logo is rendered as a realistic 3D architectural sign on the showroom wall, exhibiting depth and appropriate lighting, rather than a flat 2D watermark.",
+  "recommendations": "This image is exceptionally well-executed, meeting all compliance and quality standards. No recommendations for improvement are necessary."
+}
